@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sydney Rail Live</title>
+  <link rel="stylesheet" href="/src/ui/style.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <div id="loading"><div class="ld-title">Sydney Rail Network</div><div id="ld-msg">Loading network…</div><div class="ld-bar"><div id="ld-fill"></div></div></div>
+  <header id="topbar">
+    <div class="brand"><span class="logo">T</span><div><div class="t1">Sydney Rail Network</div><div class="t2">Live timetable simulation · Sydney Trains · Metro · NSW TrainLink</div></div></div>
+    <div class="clock"><div id="clock">--:--:--</div><div id="date">—</div></div>
+    <div class="speed" id="speed"></div>
+    <div class="stats" id="stats"></div>
+  </header>
+  <aside id="panel" class="hidden"></aside>
+  <nav id="views"></nav>
+  <div id="legend"></div>
+  <div id="hint">Drag to pan · right-drag to rotate · scroll to zoom · click a train to follow it</div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
