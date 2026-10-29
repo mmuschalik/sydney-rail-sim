@@ -281,6 +281,7 @@ renderer.setAnimationLoop(() => {
   const underground = state.selected && (state.selected.path.flagsAt(state.selected.s - state.selected.length / 2) & 1) && state.mode === 'follow';
   const xray = !!state.xray || !!underground;
   terrain.setXray(xray);
+  water.mesh.visible = !xray; // the sea-level plane would cover the see-through ground
   buildings.setXray(xray);
   terrain.update(camera);
   tracks.update(camera, { xray });
