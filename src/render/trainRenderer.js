@@ -76,6 +76,19 @@ export class TrainRenderer {
     this.markers.frustumCulled = false;
     scene.add(this.markers);
     this.tmp = { pf: new THREE.Vector3(), pr: new THREE.Vector3() };
+    // light glows (headlights white, tail lights red), additive sprites
+    this.glowMax = 4096;
+    this.glowPos = new Float32Array(this.glowMax * 3);
+    this.glowCol = new Float32Array(this.glowMax * 3);
+    this.glowGeom = new THREE.BufferGeometry();
+    this.glowGeom.setAttribute('position', new THREE.BufferAttribute(this.glowPos, 3));
+    this.glowGeom.setAttribute('color', new THREE.BufferAttribute(this.glowCol, 3));
+    this.glows = new THREE.Points(this.glowGeom, new THREE.PointsMaterial({
+      size: 1.6, sizeAttenuation: true, vertexColors: true, transparent: true, depthWrite: false,
+      blending: THREE.AdditiveBlending, map: glowTexture(), toneMapped: false,
+    }));
+    this.glows.frustumCulled = false;
+    scene.add(this.glows);
   }
 
   kind(code, variant, lod) {
@@ -145,7 +158,12 @@ export class TrainRenderer {
     const X = new THREE.Vector3(), Y = new THREE.Vector3(), Z = new THREE.Vector3(), C = new THREE.Vector3();
     const up = new THREE.Vector3(0, 1, 0);
     const { pf, pr } = this.tmp;
-    let mk = 0;
+    let mk = 0, gk = 0;
+    const addGlow = (p, X, Z, fwd, side, r, g, b) => {
+      if (gk >= this.glowMax) return;
+      this.glowPos[gk * 3] = p.x + X.x * fwd + Z.x * side; this.glowPos[gk * 3 + 1] = p.y + 1.1; this.glowPos[gk * 3 + 2] = p.z + X.z * fwd + Z.z * side;
+      this.glowCol[gk * 3] = r; this.glowCol[gk * 3 + 1] = g; this.glowCol[gk * 3 + 2] = b; gk++;
+    };
     const alt = cam.y;
     this.visibleTrains = [];
     for (const tr of trains) {
@@ -191,6 +209,12 @@ export class TrainRenderer {
         else if (i === tr.cars - 1) ls = 2;
         if (ls === 1 && !night && tr.state === 'dwell') ls = 1;
         this.push(this.kind(code, variant, lod), m, ls);
+        if (dist < 3000 && (i === 0 || i === tr.cars - 1)) {
+          const half = cl / 2 - 0.1;
+          const gi = 0.35 + this.night * 0.65;
+          if (i === 0) { addGlow(C, X, Z, half, 0.8, gi, gi, gi * 0.92); addGlow(C, X, Z, half, -0.8, gi, gi, gi * 0.92); }
+          else { addGlow(C, X, Z, half, 0.9, gi, 0.02, 0.01); addGlow(C, X, Z, half, -0.9, gi, 0.02, 0.01); }
+        }
       }
     }
     for (const k of this.kinds.values()) {
@@ -200,6 +224,10 @@ export class TrainRenderer {
         if (p.light && p.mesh.instanceColor) p.mesh.instanceColor.needsUpdate = true;
       }
     }
+    this.glowGeom.setDrawRange(0, gk);
+    this.glowGeom.attributes.position.needsUpdate = true;
+    this.glowGeom.attributes.color.needsUpdate = true;
+    this.glows.material.size = 1.2 + this.night * 1.6;
     this.markerGeom.setDrawRange(0, mk);
     this.markerGeom.attributes.position.needsUpdate = true;
     this.markerGeom.attributes.color.needsUpdate = true;
@@ -207,6 +235,16 @@ export class TrainRenderer {
     this.markers.material.size = alt > 15000 ? 5 : 7;
     for (const g of this.glass) g.emissiveIntensity = this.night * 1.1;
   }
+}
+
+function glowTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.2, 'rgba(255,255,255,0.7)'); r.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = r; g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
 }
 
 function dotTexture() {

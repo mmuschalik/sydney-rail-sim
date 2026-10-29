@@ -21,6 +21,12 @@ export class Network {
     this.stops = json.stops;
     this.platforms = json.platforms;
     this.features = json.features;
+    this.crossings = json.features.filter((f) => f[2] === 'level_crossing').map(([e, off], i) => ({ id: i, e, off, active: false, t: 0 }));
+    this.crossingsByEdge = new Map();
+    for (const c of this.crossings) {
+      if (!this.crossingsByEdge.has(c.e)) this.crossingsByEdge.set(c.e, []);
+      this.crossingsByEdge.get(c.e).push(c);
+    }
     this.signals = json.signals.map(([e, off, dir, type, pos, ref, states, speed], i) => ({
       id: i, e, off, dir, type, pos, ref, states, speed, aspect: 3, held: 0,
     }));
@@ -212,6 +218,7 @@ export class Path {
     this.segStart = segStart;
     this._buildSpeed();
     this._buildSignals();
+    this._buildCrossings();
     this._smoothHeights();
   }
 
@@ -264,6 +271,20 @@ export class Path {
     list.sort((p, q) => p.s - q.s);
     this.signalList = list;
     this.mainSignals = list.filter((x) => x.sig.type === 'main' || x.sig.type === 'metro');
+  }
+
+  _buildCrossings() {
+    const list = [];
+    this.segs.forEach(([eid, d, a, b], i) => {
+      const cs = this.net.crossingsByEdge.get(eid);
+      if (!cs) return;
+      for (const c of cs) {
+        const inRange = d > 0 ? c.off >= a && c.off <= b : c.off <= a && c.off >= b;
+        if (inRange) list.push({ s: this.segStart[i] + Math.abs(c.off - a) - this.offset, c });
+      }
+    });
+    list.sort((p, q) => p.s - q.s);
+    this.crossingList = list;
   }
 
   /** speed limit (m/s) at path position s (s relative to first stop) */

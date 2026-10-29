@@ -7,6 +7,7 @@ import { Terrain, initDem } from './world/terrain.js';
 import { TrackRenderer } from './world/tracks.js';
 import { StationRenderer } from './world/stations.js';
 import { SignalRenderer } from './world/signals.js';
+import { CrossingRenderer } from './world/crossings.js';
 import { Buildings } from './world/buildings.js';
 import { Environment, sydneyOffset } from './world/environment.js';
 import { makeCarver } from './world/carve.js';
@@ -90,7 +91,7 @@ const sim = new Simulation(net, patterns);
 
 let { date, t } = sydneyNow();
 if (q.get('date')) date = q.get('date');
-if (q.get('t')) { const [h, m] = q.get('t').split(':').map(Number); t = h * 3600 + m * 60; }
+if (q.get('t')) { const [h, m, sec = 0] = q.get('t').split(':').map(Number); t = h * 3600 + m * 60 + sec; }
 // service day: before 3am belongs to the previous day's timetable
 if (t < 3 * 3600) { date = shiftDate(date, -1); t += 86400; }
 progress('Loading timetable…', 0.4);
@@ -111,6 +112,7 @@ const tracks = new TrackRenderer(net, scene, {
 });
 const stations = new StationRenderer(net, scene, 0);
 const signals = new SignalRenderer(net, scene);
+const crossings = new CrossingRenderer(net, scene);
 const buildings = new Buildings(scene);
 await buildings.init();
 const trains = new TrainRenderer(scene);
@@ -268,6 +270,8 @@ renderer.setAnimationLoop(() => {
   stations.update(camera, (x, z) => terrain.heightAt(x, z));
   trains.update(sim.active, camera, { selected: state.selected, tunnelLights: true });
   signals.setVisible(camera);
+  crossings.setVisible(camera);
+  crossings.update(dt * Math.min(sim.paused ? 0 : sim.speed, 20), performance.now() / 1000);
   sigTimer += dt;
   if (sigTimer > 0.25) { sigTimer = 0; signals.update(); }
   uiTimer += dt;

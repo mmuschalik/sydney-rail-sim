@@ -44,34 +44,45 @@ export class Simulation {
     this.buildTrains([...late, ...today.trips]);
   }
 
+  /**
+   * Group trips into physical trains. TfNSW run numbers change per trip, so trains are
+   * formed the way terminus turnarounds work: a consist that terminates at a platform
+   * forms the next departure from that same platform (same fleet and car count),
+   * at least MIN_TURN seconds later and within MAX_TURN.
+   */
   buildTrains(trips) {
-    const byRun = new Map();
+    const MIN_TURN = 120, MAX_TURN = 75 * 60;
+    const items = [];
     for (const t of trips) {
-      const key = t.run + (t.id.endsWith('#y') ? '#y' : '');
-      if (!byRun.has(key)) byRun.set(key, []);
-      byRun.get(key).push(t);
+      const pattern = this.patterns[t.p];
+      if (pattern) items.push({ trip: t, pattern, path: null });
     }
-    const trains = [];
-    for (const [run, list] of byRun) {
-      list.sort((a, b) => a.t[1] - b.t[1]);
-      let chain = [];
-      const flush = () => { if (chain.length) trains.push(new Train(this, run, chain)); chain = []; };
-      for (const t of list) {
-        const pattern = this.patterns[t.p];
-        if (!pattern) continue;
-        const item = { trip: t, pattern, path: null };
-        if (chain.length) {
-          const prev = chain[chain.length - 1];
-          const pEnd = prev.pattern.stops[prev.pattern.stops.length - 1][0];
-          const nStart = pattern.stops[0][0];
-          const endT = prev.trip.t[prev.trip.t.length - 3];
-          const sameStation = pEnd && nStart && this.stationOf(pEnd) === this.stationOf(nStart);
-          if (!(sameStation && t.t[1] - endT < 3 * 3600 && t.t[1] >= endT)) flush();
+    items.sort((a, b) => a.trip.t[1] - b.trip.t[1]);
+    const waiting = new Map(); // platform stop id -> [{chain, freeAt, key}]
+    const chains = [];
+    for (const it of items) {
+      const st0 = it.pattern.stops[0][0];
+      const dep = it.trip.t[1];
+      const key = it.trip.f + '|' + it.trip.n;
+      let chain = null;
+      const list = st0 && waiting.get(st0);
+      if (list) {
+        let bi = -1;
+        for (let i = 0; i < list.length; i++) {
+          const w = list[i];
+          if (w.key === key && w.freeAt + MIN_TURN <= dep && dep - w.freeAt <= MAX_TURN && (bi < 0 || w.freeAt < list[bi].freeAt)) bi = i;
         }
-        chain.push(item);
+        if (bi >= 0) { chain = list[bi].chain; list.splice(bi, 1); }
       }
-      flush();
+      if (!chain) { chain = []; chains.push(chain); }
+      chain.push(it);
+      const last = it.pattern.stops[it.pattern.stops.length - 1][0];
+      if (last) {
+        if (!waiting.has(last)) waiting.set(last, []);
+        waiting.get(last).push({ chain, freeAt: it.trip.t[it.trip.t.length - 3], key });
+      }
     }
+    const trains = chains.map((c) => new Train(this, c[0].trip.run, c));
     trains.sort((a, b) => a.spawnTime - b.spawnTime);
     this.trains = trains;
     this.active = [];
@@ -122,11 +133,23 @@ export class Simulation {
       }
       for (const tr of this.active) tr.update(this.time, dt);
       this.sigTimer += dt;
-      if (this.sigTimer > 0.5) { this.sigTimer = 0; this.updateSignals(); }
+      if (this.sigTimer > 0.5) { this.sigTimer = 0; this.updateSignals(); this.updateCrossings(); }
     }
     let removed = false;
     for (const tr of this.active) if (tr.state === 'done') { tr.visible = false; removed = true; }
     if (removed) this.active = this.active.filter((t) => t.state !== 'done');
+  }
+
+  /** Level crossings: warning starts ~30 s before a train arrives, booms rise after it clears. */
+  updateCrossings() {
+    for (const c of this.net.crossings) c.active = false;
+    for (const tr of this.active) {
+      if (tr.state === 'pending' || tr.state === 'done') continue;
+      const warn = Math.max(250, tr.v * 32);
+      for (const x of tr.path.crossingList) {
+        if (x.s > tr.s - tr.length - 5 && x.s < tr.s + warn) x.c.active = true;
+      }
+    }
   }
 
   /**

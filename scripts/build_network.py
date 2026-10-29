@@ -264,7 +264,11 @@ print('signals', collections.Counter(s['type'] for s in signals))
 features = []
 for nid, t in node_tags.items():
     r = t.get('railway')
-    if r in ('switch', 'buffer_stop', 'level_crossing', 'crossing', 'derail') and nid in node_pos_in_ways:
+    if r == 'level_crossing' and t.get('access') in ('no', 'private', 'permit'):
+        r = 'staff_crossing'
+    if r == 'level_crossing' and not (t.get('crossing:barrier') or t.get('ref:operator_inventory') or t.get('name')):
+        r = 'minor_crossing'  # untagged: footpaths / mapping artefacts, not public road crossings
+    if r in ('switch', 'buffer_stop', 'level_crossing', 'crossing', 'derail', 'staff_crossing', 'minor_crossing') and nid in node_pos_in_ways:
         wid, i = node_pos_in_ways[nid][0]
         if (wid, i) not in way_node_edge:
             continue

@@ -8,8 +8,8 @@ function concreteTexture() {
   const g = c.getContext('2d');
   const img = g.createImageData(256, 256);
   for (let i = 0; i < img.data.length; i += 4) {
-    const n = 175 + Math.random() * 25;
-    img.data[i] = n; img.data[i + 1] = n * 0.98; img.data[i + 2] = n * 0.94; img.data[i + 3] = 255;
+    const n = 112 + Math.random() * 22;
+    img.data[i] = n; img.data[i + 1] = n * 0.98; img.data[i + 2] = n * 0.95; img.data[i + 3] = 255;
   }
   g.putImageData(img, 0, 0);
   const t = new THREE.CanvasTexture(c);
@@ -27,7 +27,7 @@ export class StationRenderer {
     this.matTop = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 });
     this.matSide = new THREE.MeshStandardMaterial({ color: 0x8f8a80, roughness: 0.9 });
     this.matEdge = new THREE.MeshStandardMaterial({ color: 0xf2c200, roughness: 0.6 });
-    this.matRoof = new THREE.MeshStandardMaterial({ color: 0xd9dcdf, roughness: 0.45, metalness: 0.5, side: THREE.DoubleSide });
+    this.matRoof = new THREE.MeshStandardMaterial({ color: 0x8e979f, roughness: 0.62, metalness: 0.3, side: THREE.DoubleSide });
     this.matPost = new THREE.MeshStandardMaterial({ color: 0x2f4f6f, roughness: 0.5, metalness: 0.4 });
     this.matLamp = new THREE.MeshBasicMaterial({ color: 0xfff1d0, toneMapped: false });
     this.matLamp.userData.nightLamp = true;
