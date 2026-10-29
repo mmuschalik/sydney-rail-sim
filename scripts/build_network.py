@@ -301,14 +301,29 @@ for w in json.load(open(f'{RAW}/platforms.json'))['elements']:
         continue
     g = w['geometry']
     px, pz = project_arr([p['lat'] for p in g], [p['lon'] for p in g])
-    cx, cz = float(np.mean(px)), float(np.mean(pz))
-    y, dist = track_height_near(cx, cz)
-    if dist > 40:
+    outline = LineString(np.stack([px, pz], 1)) if len(px) > 1 else Point(px[0], pz[0])
+    underground = t.get('level', '0').startswith('-') or t.get('location') == 'underground' or t.get('tunnel') == 'yes'
+    best = None
+    for i in tree.query(outline.buffer(9.0)):
+        i = int(i)
+        e = edges[i]
+        dist = tree_lines[i].distance(outline)
+        if dist > 9.0:
+            continue
+        if underground != e['tunnel']:
+            dist += 50  # wrong level: only as a last resort
+        mid = outline.centroid if outline.geom_type != 'Point' else outline
+        dpos = tree_lines[i].project(mid)
+        y = float(np.interp(dpos, cumlen(e['xz']), e['y']))
+        if best is None or dist < best[0]:
+            best = (dist, y)
+    if best is None:
         continue
+    y = best[1]
     plats.append(dict(osm=w['id'], ref=t.get('ref', ''), name=t.get('name', ''),
                       closed=w['nodes'][0] == w['nodes'][-1], covered=t.get('covered', ''),
                       xz=np.stack([px, pz], 1), y=y + 1.1,
-                      underground=t.get('level', '0').startswith('-') or t.get('location') == 'underground'))
+                      underground=underground))
 print('platforms', len(plats))
 
 pickle.dump(dict(edges=edges, node_edges=dict(node_edges), nxz=nxz, h=h, signals=signals,
