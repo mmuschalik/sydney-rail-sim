@@ -245,7 +245,8 @@ export class Terrain {
       const dz = Math.max(n.b.z0 - cam.z, 0, cam.z - n.b.z1);
       const dy = Math.max(0, cam.y - n.hmax);
       const dist = Math.hypot(dx, dy, dz);
-      const wantSplit = n.z < MAX_Z && dist < n.size * SPLIT;
+      const maxZ = cam.y > 9000 ? 12 : cam.y > 4000 ? 14 : MAX_Z;
+      const wantSplit = n.z < maxZ && dist < n.size * SPLIT;
       if (wantSplit) {
         if (!n.children) n.children = [0, 1, 2, 3].map((q) => this.node(n.z + 1, n.x * 2 + (q & 1), n.y * 2 + (q >> 1)));
         const ready = n.children.every((c) => c.state >= 2);

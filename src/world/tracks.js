@@ -2,6 +2,9 @@
 // tunnel overlays, distant network lines. Geometry is chunked (4 km cells) with distance LOD.
 import * as THREE from 'three';
 import { FLAG } from '../sim/network.js';
+import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 
 const CELL = 4000;
 const GAUGE_HALF = 0.7525;
@@ -92,6 +95,7 @@ export class TrackRenderer {
   constructor(net, scene, opts = {}) {
     this.net = net;
     this.skipStructure = opts.skipStructure || (() => false);
+    this.edgeColor = opts.edgeColor || new Map();
     this.group = new THREE.Group();
     this.group.name = 'tracks';
     scene.add(this.group);
@@ -104,9 +108,9 @@ export class TrackRenderer {
       steel: new THREE.MeshStandardMaterial({ color: 0x6d7276, roughness: 0.6, metalness: 0.6 }),
       wire: new THREE.LineBasicMaterial({ color: 0x2b2b2b, transparent: true, opacity: 0.85 }),
       shell: new THREE.MeshStandardMaterial({ color: 0x7d8fa3, roughness: 0.6, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }),
-      far: new THREE.LineBasicMaterial({ color: 0xe8dcc8, transparent: true, opacity: 0.55 }),
-      tunnel: new THREE.LineBasicMaterial({ color: 0xffb04a, transparent: true, opacity: 0.55, depthTest: false }),
-      metroTunnel: new THREE.LineBasicMaterial({ color: 0x2ad1c4, transparent: true, opacity: 0.6, depthTest: false }),
+      far: new LineMaterial({ vertexColors: true, linewidth: 2.5, transparent: true, opacity: 0.95, worldUnits: false }),
+      tunnel: new LineMaterial({ color: 0xffb04a, linewidth: 2.0, transparent: true, opacity: 0.6, depthTest: false, dashed: false }),
+      metroTunnel: new LineMaterial({ color: 0x2ad1c4, linewidth: 2.0, transparent: true, opacity: 0.65, depthTest: false }),
     };
     this.mats.ballast.polygonOffset = true; this.mats.ballast.polygonOffsetFactor = -1; this.mats.ballast.polygonOffsetUnits = -2;
     this.build();
@@ -118,7 +122,7 @@ export class TrackRenderer {
     if (!c) {
       c = {
         key, origin: new THREE.Vector3((Math.floor(x / CELL) + 0.5) * CELL, 0, (Math.floor(z / CELL) + 0.5) * CELL),
-        ballast: new Builder(), rails: new Builder(), deck: new Builder(), shell: new Builder(), wires: [], far: [], tunnel: [], metroTunnel: [], masts: [],
+        ballast: new Builder(), rails: new Builder(), deck: new Builder(), shell: new Builder(), wires: [], far: [], farCol: [], tunnel: [], metroTunnel: [], masts: [],
       };
       this.cells.set(key, c);
     }
@@ -168,7 +172,11 @@ export class TrackRenderer {
       const c = this.cell(pts[0], pts[2]);
       // distant line representation
       const farArr = tunnel ? (metro ? c.metroTunnel : c.tunnel) : c.far;
-      for (let i = 1; i < n; i++) farArr.push(pts[i * 3 - 3], pts[i * 3 - 2] + 1, pts[i * 3 - 1], pts[i * 3], pts[i * 3 + 1] + 1, pts[i * 3 + 2]);
+      const col = this.edgeColor.get(e.id) || (e.service ? [0.55, 0.52, 0.48] : [0.8, 0.78, 0.74]);
+      for (let i = 1; i < n; i++) {
+        farArr.push(pts[i * 3 - 3], pts[i * 3 - 2] + 1, pts[i * 3 - 1], pts[i * 3], pts[i * 3 + 1] + 1, pts[i * 3 + 2]);
+        if (!tunnel) c.farCol.push(...col, ...col);
+      }
 
       // ballast ribbon (also in tunnels, for underground views); slab track look on bridges
       const B = c.ballast;
@@ -300,14 +308,25 @@ export class TrackRenderer {
         const l = new THREE.LineSegments(g, mat); grp.add(l); return l;
       };
       c.wireMesh = lines(c.wires, this.mats.wire);
-      c.farMesh = lines(c.far, this.mats.far);
-      c.tunnelMesh = lines(c.tunnel, this.mats.tunnel);
-      c.metroTunnelMesh = lines(c.metroTunnel, this.mats.metroTunnel);
+      const fat = (arr, colArr, mat) => {
+        if (!arr.length) return null;
+        const f = new Float32Array(arr);
+        for (let i = 0; i < f.length; i += 3) { f[i] -= o.x; f[i + 2] -= o.z; }
+        const g = new LineSegmentsGeometry();
+        g.setPositions(f);
+        if (colArr) g.setColors(new Float32Array(colArr));
+        const l = new LineSegments2(g, mat);
+        grp.add(l);
+        return l;
+      };
+      c.farMesh = fat(c.far, c.farCol, this.mats.far);
+      c.tunnelMesh = fat(c.tunnel, null, this.mats.tunnel);
+      c.metroTunnelMesh = fat(c.metroTunnel, null, this.mats.metroTunnel);
       if (c.tunnelMesh) c.tunnelMesh.renderOrder = 5;
       if (c.metroTunnelMesh) c.metroTunnelMesh.renderOrder = 5;
       c.group = grp;
       this.group.add(grp);
-      delete c.ballast; delete c.rails; delete c.deck; delete c.shell; delete c.wires; delete c.far; delete c.tunnel; delete c.metroTunnel;
+      delete c.ballast; delete c.rails; delete c.deck; delete c.shell; delete c.wires; delete c.far; delete c.farCol; delete c.tunnel; delete c.metroTunnel;
     }
 
     // masts: instanced I-beam pole + cantilever arm
@@ -327,6 +346,8 @@ export class TrackRenderer {
   /** distance LOD per cell + tunnel overlay toggle */
   update(camera, opts = {}) {
     const cp = camera.position;
+    for (const m of [this.mats.far, this.mats.tunnel, this.mats.metroTunnel]) m.resolution.set(innerWidth, innerHeight);
+    this.mats.far.linewidth = cp.y > 6000 ? 2.5 : 1.8;
     const alt = Math.max(0, cp.y);
     for (const c of this.cells.values()) {
       const d = Math.hypot(c.origin.x - cp.x, c.origin.z - cp.z) - CELL * 0.7;

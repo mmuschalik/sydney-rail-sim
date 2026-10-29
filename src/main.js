@@ -107,7 +107,25 @@ const skyEnv = new SkyEnvironment(renderer, scene, env.sky);
 await initDem();
 const carver = makeCarver(net);
 const terrain = new Terrain(scene, { carve: carver });
+// colour each track by the line running the most trips over it today (network overview)
+const edgeColor = new Map();
+{
+  const counts = new Map();
+  for (const tr of sim.trains) for (const it of tr.trips) {
+    for (const [eid] of it.pattern.segs) {
+      let m = counts.get(eid); if (!m) counts.set(eid, (m = new Map()));
+      m.set(it.trip.c, (m.get(it.trip.c) || 0) + 1);
+    }
+  }
+  for (const [eid, m] of counts) {
+    let best = null, bn = 0;
+    for (const [c, k] of m) if (k > bn) { bn = k; best = c; }
+    const col = new THREE.Color('#' + best);
+    edgeColor.set(eid, [col.r, col.g, col.b]);
+  }
+}
 const tracks = new TrackRenderer(net, scene, {
+  edgeColor,
   skipStructure: (x, z) => !!lm && (lm.harbourBridgeRailHeight(x, z) != null || lm.metroBridgeRailHeight(x, z) != null),
 });
 const stations = new StationRenderer(net, scene, 0);
