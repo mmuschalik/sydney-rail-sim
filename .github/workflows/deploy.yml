@@ -1,0 +1,72 @@
+name: Build & deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 17 * * 0' # weekly, Monday 03:00/04:00 Sydney time
+  workflow_dispatch:
+    inputs:
+      refresh_timetable:
+        description: 'Download the latest TfNSW GTFS and rebuild timetables first'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    # Rebuild the 21-day timetable from the current TfNSW feed (track network is fixed in data/pipeline)
+    if: github.event_name == 'schedule' || inputs.refresh_timetable
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install -r scripts/requirements-ci.txt
+      - name: Download GTFS
+        run: |
+          mkdir -p data/raw/gtfs data/build
+          curl -sSL -o gtfs.zip "https://opendata.transport.nsw.gov.au/data/dataset/d1f68d4f-b778-44df-9823-cf2fa922e47f/resource/67974f14-01bf-47b7-bfa5-c7f2f8a950ca/download/full_greater_sydney_gtfs_static_0.zip"
+          unzip -q -o gtfs.zip -d data/raw/gtfs && rm gtfs.zip
+          cp data/pipeline/network.pkl data/build/network.pkl
+      - name: Extract, route, export
+        run: |
+          python scripts/gtfs_extract.py
+          python scripts/route_trips.py | tail -3
+          python scripts/export_timetable.py | tail -3
+      - name: Commit timetable data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add public/data/patterns.json public/data/tt
+          git diff --cached --quiet || git commit -m "Refresh timetables from TfNSW GTFS"
+          git push
+
+  deploy:
+    needs: refresh
+    if: always() && needs.refresh.result != 'failure'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx vite build
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: dist }
+      - id: deployment
+        uses: actions/deploy-pages@v4

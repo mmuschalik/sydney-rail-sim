@@ -4,7 +4,7 @@ public/data/patterns.json : [{segs, len, stops:[[stop_id, platStart, platEnd, he
 public/data/tt/YYYYMMDD.json : {date, dow, trips:[...]}  (trips running on that service date)
 public/data/tt/index.json : available dates
 """
-import pickle, json, os, datetime, collections
+import pickle, json, os, datetime, collections, shutil
 
 r = pickle.load(open('data/build/routed.pkl', 'rb'))
 g = pickle.load(open('data/build/gtfs_rail.pkl', 'rb'))
@@ -47,7 +47,11 @@ def active(svc, d):
     return c['start_date'] <= ds <= c['end_date'] and c[DOW[d.weekday()]] == '1'
 
 
-start = datetime.date(2026, 10, 29)
+# start from today in Sydney (UTC+10/11); override with TT_START=YYYYMMDD
+_s = os.environ.get('TT_START')
+start = datetime.date(int(_s[:4]), int(_s[4:6]), int(_s[6:])) if _s else (datetime.datetime.utcnow() + datetime.timedelta(hours=10)).date()
+shutil.rmtree('public/data/tt', ignore_errors=True)
+os.makedirs('public/data/tt', exist_ok=True)
 dates = []
 for k in range(21):
     d = start + datetime.timedelta(days=k)

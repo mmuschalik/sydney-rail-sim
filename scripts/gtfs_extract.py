@@ -1,5 +1,5 @@
 """Extract rail-only GTFS subset into data/build/gtfs_rail.pkl."""
-import csv, pickle, collections
+import csv, pickle, collections, os
 G='data/raw/gtfs'
 routes={x['route_id']:x for x in csv.DictReader(open(f'{G}/routes.txt',encoding='utf-8-sig'))
         if x['agency_id'] in ('x0001','SMNW','X0000','X000') and x['route_type'] in ('2','401')}
@@ -23,5 +23,15 @@ cal={c['service_id']:c for c in csv.DictReader(open(f'{G}/calendar.txt',encoding
 svc=set(t['service_id'] for t in trips.values())
 cal={k:v for k,v in cal.items() if k in svc}
 cd=[c for c in csv.DictReader(open(f'{G}/calendar_dates.txt',encoding='utf-8-sig')) if c['service_id'] in svc]
+os.makedirs('data/build', exist_ok=True)
 pickle.dump(dict(routes=routes,trips=trips,stop_times=dict(st),stops=keep,calendar=cal,calendar_dates=cd),open('data/build/gtfs_rail.pkl','wb'))
 print(len(trips),len(st),len(keep),len(cal),len(cd))
+
+# rail shapes only (shapes.txt is ~1 GB, mostly buses)
+need = set(t['shape_id'] for t in trips.values())
+with open(f'{G}/shapes.txt', encoding='utf-8-sig') as f, open(f'{G}/rail_shapes.txt', 'w') as out:
+    out.write(f.readline())
+    for line in f:
+        if line[1:line.index('"', 1)] in need:
+            out.write(line)
+print('rail shapes written')

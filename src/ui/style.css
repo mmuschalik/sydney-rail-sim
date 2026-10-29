@@ -56,4 +56,6 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b111a; col
 #views .sep { width: 1px; background: var(--line); margin: 0 4px; }
 #legend { position: fixed; right: 12px; bottom: 12px; background: var(--bg); padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); z-index: 5; display: flex; flex-wrap: wrap; gap: 4px; max-width: 340px; }
 #legend .badge { font-size: 11px; height: 20px; min-width: 26px; margin: 0; }
-#hint { position: fixed; left: 50%; transform: translateX(-50%); bottom: 64px; color: var(--mut); font-size: 11px; background: var(--bg); padding: 4px 10px; border-radius: 6px; z-index: 4; }
+#hint { position: fixed; left: 50%; transform: translateX(-50%); bottom: 70px; color: var(--mut); font-size: 11px; background: var(--bg); padding: 4px 10px; border-radius: 6px; z-index: 4; }
+#attrib { position: fixed; left: 50%; transform: translateX(-50%); bottom: 2px; font-size: 10px; color: #c5d0dc; background: rgba(10,16,24,.6); padding: 2px 8px; border-radius: 4px; z-index: 6; white-space: nowrap; }
+#attrib a { color: #e6edf5; }
